@@ -1,5 +1,5 @@
 {
-  "name": "@sam/react-video-player",
+  "name": "sam-react-video-player",
   "version": "1.0.0",
   "type": "module",
   "description": "A React Video Player Component with advanced options like captions, preview images.",
