@@ -1,7 +1,7 @@
 import "./App.css";
-import video1 from "../src/assets/videos/Video.mp4";
-import video2 from "../src/assets/videos/video1.mp4";
-import { VideoPlayer } from "./VideoPlayer";
+import video1 from "./assets/videos/Video.mp4";
+import video2 from "./assets/videos/video1.mp4";
+import { VideoPlayer } from "./components/VideoPlayer";
 
 const videos = [
   {
