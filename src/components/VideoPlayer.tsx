@@ -1,19 +1,23 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./index.css";
 interface VideoPlayerProps {
   captions: { lang: string; src: string }[];
   src: string;
-  width: number;
-  height: number;
+  width: string;
+  height: string;
+  poster: string;
 }
 export const VideoPlayer = ({
   captions,
   src,
   width,
   height,
+  poster,
 }: VideoPlayerProps) => {
   const [caption, setCaption] = useState("");
   const [hidden, setHidden] = useState(true);
+  const [previewImages, setPreviewImages] = useState<string[]>([]);
+  const [loadingPreviews, setLoadingPreviews] = useState(true); // Track loading state
 
   const playPauseBtn = useRef<HTMLButtonElement>(null);
   const theaterBtn = useRef<HTMLButtonElement>(null);
@@ -29,7 +33,7 @@ export const VideoPlayer = ({
   const volumeSlider = useRef<HTMLInputElement>(null);
   const videoContainer = useRef<HTMLDivElement>(null);
   const timelineContainer = useRef<HTMLDivElement>(null);
-  const video = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   document.addEventListener("keydown", (e) => {
     const tagName = document.activeElement?.tagName?.toLowerCase() || "";
@@ -71,9 +75,76 @@ export const VideoPlayer = ({
     }
   });
 
+  //Generating previews
+  useEffect(() => {
+    const generatePreviews = async () => {
+      if (videoRef.current) {
+        videoRef.current.pause(); // Pause the video
+
+        const videoDuration = videoRef.current.duration;
+        const interval = 10; // Set the interval to 10 seconds
+
+        const previewTimestamps = Array.from(
+          { length: Math.ceil(videoDuration / interval) },
+          (_, index) => index * interval
+        );
+
+        const previews = [];
+        for (const timestamp of previewTimestamps) {
+          const preview = await capturePreviewImageAtTimestamp(timestamp);
+          previews.push(preview);
+        }
+
+        setPreviewImages(previews);
+        setLoadingPreviews(false); // Previews have finished loading
+        videoRef.current.currentTime = 0; // Reset the video to the beginning
+      }
+    };
+
+    const capturePreviewImageAtTimestamp = (timestamp: number) => {
+      return new Promise<string>((resolve) => {
+        if (videoRef.current) {
+          const handleSeeked = () => {
+            if (videoRef.current) {
+              const canvas = document.createElement("canvas");
+              canvas.width = videoRef.current.videoWidth;
+              canvas.height = videoRef.current.videoHeight;
+              const ctx = canvas.getContext("2d");
+              if (ctx) {
+                ctx.drawImage(
+                  videoRef.current,
+                  0,
+                  0,
+                  canvas.width,
+                  canvas.height
+                );
+                const dataUrl = canvas.toDataURL("image/jpeg");
+                resolve(dataUrl);
+              }
+            }
+          };
+
+          videoRef.current.currentTime = timestamp;
+          videoRef.current.addEventListener("seeked", handleSeeked, {
+            once: true,
+          });
+        }
+      });
+    };
+
+    const videoElementREF = videoRef.current;
+    videoElementREF?.addEventListener("loadedmetadata", generatePreviews);
+
+    return () => {
+      videoElementREF?.removeEventListener("loadedmetadata", generatePreviews);
+    };
+  }, [src]);
+
   //1.Play/Pause functinality
   const togglePlay = () => {
-    video.current?.paused ? video.current.play() : video.current?.pause();
+    return videoRef.current?.paused
+      ? videoRef.current?.play()
+      : videoRef.current?.pause();
   };
   const handlePlay = () => {
     videoContainer.current?.classList.remove("paused");
@@ -101,8 +172,8 @@ export const VideoPlayer = ({
       console.log("sfsd:", document.exitPictureInPicture());
     } else {
       //this function causes picture in picture view-
-      video.current?.requestPictureInPicture();
-      console.log("sdfs:", video.current?.requestPictureInPicture);
+      videoRef.current?.requestPictureInPicture();
+      console.log("sdfs:", videoRef.current?.requestPictureInPicture);
     }
   }
   document.addEventListener("fullscreenchange", () => {
@@ -114,25 +185,25 @@ export const VideoPlayer = ({
 
   //3.Volume
   const toggleMute = () => {
-    if (video.current?.muted !== undefined) {
-      video.current!.muted = !video.current!.muted;
+    if (videoRef.current?.muted !== undefined) {
+      videoRef.current!.muted = !videoRef.current!.muted;
     }
   };
   const handleVolumeSliderOnInput = (e: React.FormEvent<HTMLInputElement>) => {
-    if (video.current && e.target instanceof HTMLInputElement) {
-      video.current.volume = Number(e.target.value);
-      video.current.muted = Number(e.target.value) === 0;
+    if (videoRef.current && e.target instanceof HTMLInputElement) {
+      videoRef.current.volume = Number(e.target.value);
+      videoRef.current.muted = Number(e.target.value) === 0;
     }
   };
   const handleVideoOnVolumeChange = () => {
-    if (volumeSlider.current && video.current && videoContainer.current) {
-      volumeSlider.current.value = video.current.volume.toString();
+    if (volumeSlider.current && videoRef.current && videoContainer.current) {
+      volumeSlider.current.value = videoRef.current.volume.toString();
       let volumeLevel;
-      if (video.current.muted || video.current.volume === 0) {
+      if (videoRef.current.muted || videoRef.current.volume === 0) {
         //using template literal converting it into string
         volumeSlider.current.value = `${0}`;
         volumeLevel = "muted";
-      } else if (video.current.volume >= 0.5) {
+      } else if (videoRef.current.volume >= 0.5) {
         volumeLevel = "high";
       } else {
         volumeLevel = "low";
@@ -144,21 +215,25 @@ export const VideoPlayer = ({
 
   //4.Duration Elapsed
   const handleVideoOnLoadedData = () => {
-    if (totalTimeElem.current && video.current) {
+    if (totalTimeElem.current && videoRef.current) {
       totalTimeElem.current.textContent = formatDuration(
-        video.current.duration
+        videoRef.current.duration
       );
     }
   };
   //function that gets called in every time changes
   const handleVideoOnTimeUpdate = () => {
-    if (currentTimeElem.current && video.current && timelineContainer.current) {
+    if (
+      currentTimeElem.current &&
+      videoRef.current &&
+      timelineContainer.current
+    ) {
       currentTimeElem.current.textContent = formatDuration(
-        video.current.currentTime
+        videoRef.current.currentTime
       );
 
       //for scrubbing
-      const percent = video.current.currentTime / video.current.duration;
+      const percent = videoRef.current.currentTime / videoRef.current.duration;
       timelineContainer.current.style.setProperty(
         "--progress-position",
         percent.toString()
@@ -182,20 +257,20 @@ export const VideoPlayer = ({
 
   //4. Skip
   function skip(duration: any) {
-    if (video.current) {
-      video.current.currentTime += duration;
+    if (videoRef.current) {
+      videoRef.current.currentTime += duration;
     }
   }
 
   //5.Captions
   function toggleCaptions() {
-    if (video.current && videoContainer.current) {
+    if (videoRef.current && videoContainer.current) {
       if (hidden) {
         //Note: video.firstChildElement wont work
-        video.current.textTracks[0].mode = "showing";
+        videoRef.current.textTracks[0].mode = "showing";
         setHidden(!hidden);
       } else {
-        video.current.textTracks[0].mode = "hidden";
+        videoRef.current.textTracks[0].mode = "hidden";
         setHidden(!hidden);
       }
       videoContainer.current.classList.toggle("captions");
@@ -204,10 +279,10 @@ export const VideoPlayer = ({
 
   //6. Playback Speed
   function changePlaybackSpeed() {
-    if (video.current && speedBtn.current) {
-      let newPlaybackRate = video.current.playbackRate + 0.25;
+    if (videoRef.current && speedBtn.current) {
+      let newPlaybackRate = videoRef.current.playbackRate + 0.25;
       if (newPlaybackRate > 2) newPlaybackRate = 0.25;
-      video.current.playbackRate = newPlaybackRate;
+      videoRef.current.playbackRate = newPlaybackRate;
       speedBtn.current.textContent = `${newPlaybackRate}x`;
     }
   }
@@ -221,7 +296,11 @@ export const VideoPlayer = ({
     if (isScrubbing) toggleScrubbing(e);
   });
   function toggleScrubbing(e: any) {
-    if (videoContainer.current && video.current && timelineContainer.current) {
+    if (
+      videoContainer.current &&
+      videoRef.current &&
+      timelineContainer.current
+    ) {
       const rect = timelineContainer.current.getBoundingClientRect();
       const percent =
         Math.min(Math.max(0, e.pageX - rect.x), rect.width) / rect.width;
@@ -230,11 +309,11 @@ export const VideoPlayer = ({
       console.log(isScrubbing);
       videoContainer.current.classList.toggle("scrubbing", isScrubbing);
       if (isScrubbing) {
-        wasPaused = video.current.paused;
-        video.current.pause();
+        wasPaused = videoRef.current.paused;
+        videoRef.current.pause();
       } else {
-        video.current.currentTime = percent * video.current.duration;
-        if (!wasPaused) video.current.play();
+        videoRef.current.currentTime = percent * videoRef.current.duration;
+        if (!wasPaused) videoRef.current.play();
       }
 
       handleTimelineUpdate(e);
@@ -248,7 +327,7 @@ export const VideoPlayer = ({
   function handleTimelineUpdate(e: any) {
     if (
       timelineContainer.current &&
-      video.current &&
+      videoRef.current &&
       previewImg.current &&
       thumbnailImg.current
     ) {
@@ -259,9 +338,9 @@ export const VideoPlayer = ({
         Math.min(Math.max(0, e.pageX - rect.x), rect.width) / rect.width;
       const previewImgNumber = Math.max(
         1,
-        Math.floor((percent * video.current.duration) / 10)
+        Math.floor((percent * videoRef.current.duration) / 10)
       );
-      const previewImgSrc = `src/components/VideoPlayer/assets/previewImgs/preview${previewImgNumber}.jpg`;
+      const previewImgSrc = previewImages[previewImgNumber - 1];
       previewImg.current.src = previewImgSrc;
       timelineContainer.current.style.setProperty(
         "--preview-position",
@@ -282,6 +361,7 @@ export const VideoPlayer = ({
   return (
     <div
       ref={videoContainer}
+      style={{ visibility: loadingPreviews ? "hidden" : "visible" }}
       className="video-container paused"
       data-volume-level="high"
     >
@@ -426,7 +506,7 @@ export const VideoPlayer = ({
 
       <video
         id="vid"
-        poster="https://th.bing.com/th/id/OIP.78HGPtSH0Miqt2bHV8BMKwHaFE?pid=ImgDet&rs=1"
+        poster={poster}
         controlsList="nodownload"
         onLoadedData={handleVideoOnLoadedData}
         onTimeUpdate={handleVideoOnTimeUpdate}
@@ -434,13 +514,18 @@ export const VideoPlayer = ({
         onClick={togglePlay}
         onPlay={handlePlay}
         onPause={handlePause}
-        ref={video}
+        ref={videoRef}
         width={width}
-        height={height}
         src={src}
+        height={height}
       >
         {captions.map((caption, i) => (
-          <track kind="captions" srcLang={caption.lang} src={caption.src} />
+          <track
+            key={i}
+            kind="captions"
+            srcLang={caption.lang}
+            src={caption.src}
+          />
         ))}
       </video>
     </div>
