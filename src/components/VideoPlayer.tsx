@@ -5,16 +5,15 @@ interface VideoPlayerProps {
   src: string;
   width: string;
   height: string;
-  poster: string;
 }
 export const VideoPlayer = ({
   captions,
   src,
   width,
   height,
-  poster,
 }: VideoPlayerProps) => {
   const [caption, setCaption] = useState("");
+  const captionsBtn = useRef<HTMLButtonElement>(null);
   const [hidden, setHidden] = useState(true);
   const [previewImages, setPreviewImages] = useState<string[]>([]);
   const [loadingPreviews, setLoadingPreviews] = useState(true); // Track loading state
@@ -24,7 +23,7 @@ export const VideoPlayer = ({
   const fullScreenBtn = useRef<HTMLButtonElement>(null);
   const miniPlayerBtn = useRef<HTMLButtonElement>(null);
   const muteBtn = useRef<HTMLButtonElement>(null);
-  const captionsBtn = useRef<HTMLButtonElement>(null);
+
   const speedBtn = useRef<HTMLButtonElement>(null);
   const currentTimeElem = useRef<HTMLDivElement>(null);
   const totalTimeElem = useRef<HTMLDivElement>(null);
@@ -82,11 +81,10 @@ export const VideoPlayer = ({
         videoRef.current.pause(); // Pause the video
 
         const videoDuration = videoRef.current.duration;
-        const interval = 10; // Set the interval to 10 seconds
 
         const previewTimestamps = Array.from(
-          { length: Math.ceil(videoDuration / interval) },
-          (_, index) => index * interval
+          { length: Math.floor(videoDuration) },
+          (_, index) => index + 1 // Generate an array of timestamps for every second
         );
 
         const previews = [];
@@ -336,11 +334,17 @@ export const VideoPlayer = ({
       const rect = timelineContainer.current.getBoundingClientRect();
       const percent =
         Math.min(Math.max(0, e.pageX - rect.x), rect.width) / rect.width;
-      const previewImgNumber = Math.max(
-        1,
-        Math.floor((percent * videoRef.current.duration) / 10)
-      );
-      const previewImgSrc = previewImages[previewImgNumber - 1];
+
+      // Calculate the timestamp in seconds based on the percent of video duration
+      const videoDuration = videoRef.current.duration;
+      const currentTime = percent * videoDuration;
+      const previewImgNumber = Math.floor(currentTime); // Round down to get the index of the preview image
+
+      // Ensure the preview image number is within bounds
+      const previewImgSrc =
+        previewImages[previewImgNumber] ||
+        previewImages[previewImages.length - 1] ||
+        "";
       previewImg.current.src = previewImgSrc;
       timelineContainer.current.style.setProperty(
         "--preview-position",
@@ -506,7 +510,6 @@ export const VideoPlayer = ({
 
       <video
         id="vid"
-        poster={poster}
         controlsList="nodownload"
         onLoadedData={handleVideoOnLoadedData}
         onTimeUpdate={handleVideoOnTimeUpdate}
@@ -516,8 +519,9 @@ export const VideoPlayer = ({
         onPause={handlePause}
         ref={videoRef}
         width={width}
-        src={src}
         height={height}
+        src={src}
+        crossOrigin="anonymous"
       >
         {captions.map((caption, i) => (
           <track
